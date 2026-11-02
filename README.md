@@ -35,6 +35,32 @@ npm start
 
 Express phục vụ cả giao diện build và API tại http://127.0.0.1:3001/; trang quản trị tại http://127.0.0.1:3001/admin. `npm start` sử dụng `tsx`, vì vậy khi triển khai kiểu này cần giữ dependencies phát triển hoặc biên dịch server riêng. Đây là sản phẩm chạy local; chưa cấu hình hosting/domain. Để người yêu mở trên thiết bị khác, cần triển khai lên máy chủ Node 24 với HTTPS, gắn ổ lưu trữ bền vững cho `data/`, reverse proxy về cổng local, và đặt `COOKIE_SECURE=true`. Không đưa thư mục database lên public/static hosting. Phải giữ nguyên Host khi proxy (hoặc cấu hình rewrite Origin/Host nhất quán) để kiểm tra nguồn hoạt động.
 
+## Deploy lên Render
+
+Source repository: https://github.com/HienNguyen186/thiep_hen_ho
+
+Tạo **Web Service**, kết nối repo, chọn nhánh `main`, Language `Node`, Region `Singapore`. Root Directory để trống vì `package.json` ở gốc repository.
+
+| Cấu hình | Giá trị |
+| --- | --- |
+| Build Command | `npm ci --include=dev && npm run build` |
+| Start Command | `npm start` |
+| Health Check Path | `/api/health` |
+| `NODE_VERSION` | `24.22.1` |
+| `NODE_ENV` | `production` |
+| `HOST` | `0.0.0.0` |
+| `ADMIN_PASSWORD` | Mật khẩu riêng, tối thiểu 12 ký tự |
+| `COOKIE_SECURE` | `true` |
+| `DATABASE_PATH` | `/var/data/date-with-you.sqlite` |
+
+Render tự cung cấp `PORT` và `RENDER=true`. Server tự dùng host `0.0.0.0` và tin cậy một proxy khi nhận diện môi trường Render; local vẫn mặc định `127.0.0.1`. Nếu thêm lớp CDN/proxy khác, cần kiểm tra lại số proxy để giới hạn tốc độ theo đúng IP người dùng.
+
+**Lưu bền vững:** chọn Web Service trả phí có Persistent Disk và gắn disk tại `/var/data`. Chỉ những file trong đường dẫn disk mới được giữ qua restart/redeploy. Free service không có Persistent Disk nên không phù hợp để giữ phản hồi SQLite thật. Disk có thể gắn trong Advanced lúc tạo dịch vụ hoặc tại trang Disks sau đó. Đặt cấu hình disk trước khi gửi câu trả lời thật.
+
+Sau khi deploy, mở `/api/health` để kiểm tra `{"ok":true}`, thử gửi từ `/`, đăng nhập `/admin` và kiểm tra bản ghi vẫn còn sau khi restart. Thay tên/nội dung trong `src/config/invitation.ts`, commit và push để cập nhật bản deploy. Website chỉ được coi là đã lên mạng khi Render báo deploy thành công; việc có source trên GitHub chưa đồng nghĩa đã deploy.
+
+Tài liệu: [Web Services](https://render.com/docs/web-services), [Persistent Disks](https://render.com/docs/disks), [Node version](https://render.com/docs/node-version).
+
 ## Cá nhân hóa
 
 Sửa `src/config/invitation.ts`: tên người mời/người nhận, ngày tạo, lời mở đầu, câu hỏi, chữ ký và câu kết. Sửa các lựa chọn và URL ảnh trong `shared/options.ts`. Minh họa phong thư tạo bằng CSS, không cần API ảnh. Ảnh món ăn dùng Unsplash, lazy loading, kích thước 240px, fallback emoji khi tải lỗi. Font Google có fallback serif/sans-serif. Không phát âm thanh.
