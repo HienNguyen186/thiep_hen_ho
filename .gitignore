@@ -6,6 +6,7 @@ dist/
 .dev.vars*
 !.dev.vars.example
 .wrangler/
+.cloudflare-pages/
 backups/
 backup*.sql
 /venv/

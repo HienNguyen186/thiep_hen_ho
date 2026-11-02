@@ -1,6 +1,6 @@
 # Date with you ♡
 
-Thiệp mời hẹn hò tương tác dành cho hai người. Giao diện React được phục vụ bằng **Cloudflare Workers Static Assets**; API và trang quản trị dùng **Workers + D1**. Không cần Render hoặc ổ đĩa trả phí cho cấu hình triển khai chính. Dữ liệu phản hồi, phiên đăng nhập và giới hạn tốc độ được lưu trong D1, độc lập với vòng đời Worker.
+Thiệp mời hẹn hò tương tác dành cho hai người. Bản public dùng **Cloudflare Pages** cho giao diện React; API chạy bằng **Workers (Pages Functions) + D1**. Không cần Render hoặc ổ đĩa trả phí. Dữ liệu phản hồi, phiên đăng nhập và giới hạn tốc độ được lưu trong D1, độc lập với vòng đời Worker. Cấu hình Workers Static Assets riêng vẫn có sẵn.
 
 ## Chạy local
 
@@ -32,11 +32,36 @@ npm start
 
 Mở http://127.0.0.1:8787/ và http://127.0.0.1:8787/admin.
 
-## Deploy Cloudflare Workers + D1
+## Deploy Cloudflare Pages + Workers + D1 (bản public)
 
 Source: https://github.com/HienNguyen186/thiep_hen_ho
 
-Địa chỉ đã publish: https://thiep-hen-ho.hiennguyen186.workers.dev/ · Quản trị: https://thiep-hen-ho.hiennguyen186.workers.dev/admin
+Thiệp: https://thiep-hen-ho-hiennguyen186.pages.dev/ · Quản trị: https://thiep-hen-ho-hiennguyen186.pages.dev/admin
+
+Link này đã kiểm tra giao diện, health, gửi phản hồi, chống gửi trùng, đăng nhập quản trị, xem chi tiết, CSV và đăng xuất. Phản hồi giả dùng kiểm thử đã được xóa; dữ liệu SQLite cũ vẫn chỉ nằm trên máy.
+
+```powershell
+npm run cf:login
+npm run cf:setup
+npm run deploy:pages
+```
+
+Với tài khoản hiện tại chỉ cần `npm run deploy:pages` mỗi lần cập nhật. Script build giao diện và `_worker.js` từ cùng `worker/index.ts`, áp dụng migration D1 còn thiếu, tái sử dụng/tạo dự án Pages `thiep-hen-ho-hiennguyen186`, cấu hình cùng database và publish lên nhánh production `main`. Các file build tạm ở `.cloudflare-pages/` đã được gitignore. Push GitHub chưa tự deploy.
+
+Lần đầu script lấy `ADMIN_PASSWORD` từ `.dev.vars` hoặc `.env` qua stdin. Secret Pages đã có sẽ được giữ nguyên, độc lập với secret của Worker riêng. Để đổi mật khẩu trên bản Pages:
+
+```powershell
+npx wrangler pages secret put ADMIN_PASSWORD --project-name thiep-hen-ho-hiennguyen186
+npm run deploy:pages
+```
+
+Nhập mật khẩu riêng tối thiểu 12 ký tự, tối đa 256 ký tự. Không gửi mật khẩu vào chat hay commit. Nếu fork sang tài khoản khác, đổi tên project trong `scripts/build-pages.mjs` và làm theo hướng dẫn đổi database ID bên dưới.
+
+`_routes.json` chỉ gọi Worker cho `/api` và `/api/*`; các đường dẫn giao diện dùng SPA fallback của Pages. API và giao diện cùng domain nên không cần CORS hoặc domain trả phí. Dùng hạn mức miễn phí của Pages, Workers và D1; xem [Pages Functions pricing](https://developers.cloudflare.com/pages/functions/pricing/) và [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/).
+
+## Deploy Worker riêng (tùy chọn)
+
+Đã publish Worker tại https://thiep-hen-ho.hiennguyen186.workers.dev/ nhưng domain này còn trả lỗi edge `1042` / “There is nothing here yet”. Dùng link Pages ở trên để gửi thiệp. API của Worker đã chạy được qua remote preview; chưa xác nhận production trên domain `workers.dev` này.
 
 Dùng tài khoản **Workers Free**, tên miền phụ `workers.dev` và D1 Free. Chi phí bằng 0 trong hạn mức miễn phí; không cần mua domain. Không bật gói Workers Paid hoặc dịch vụ bổ sung nếu muốn giữ cấu hình miễn phí. Xem [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) và [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) để kiểm tra hạn mức hiện hành.
 
@@ -156,9 +181,9 @@ npm run deploy:check
 
 17 integration tests kiểm tra cả backend cũ và workerd/D1 thật local: schema ngày/giờ, idempotency đồng thời, login/cookie/logout, đã xem, CSV nhiều trang/formula escaping, body quá lớn, CSRF, phiên hết hạn, đổi mật khẩu, rate limit theo IP và dữ liệu/phiên sau restart. Tự động dùng database kiểm thử riêng; không ghi vào production.
 
-Đã kiểm tra luồng UI trên desktop/mobile, khôi phục nháp, sửa từ tổng hợp, gửi, quản trị, sao chép và tải CSV ở bản trước. Sau migration, kiểm tra lại health, login và giao diện thực tế trên URL Worker. Ảnh QA ở `test-results/` (gitignored).
+Đã kiểm tra luồng UI trên desktop/mobile, khôi phục nháp, sửa từ tổng hợp, gửi, quản trị, sao chép và tải CSV ở bản trước. Sau migration, đã kiểm tra giao diện thật trên Pages, `/api/health` trả `200 {"ok":true}`, API lỗi JSON, lưu/chống trùng, cookie Secure/HttpOnly/SameSite, danh sách/chi tiết/đã xem, CSV và đăng xuất. Ảnh QA ở `test-results/` (gitignored).
 
-Cloudflare đã chấp nhận bản deploy và cấp URL, nhưng trong lần triển khai đầu tiên tên miền mới còn trả lỗi edge `1042` khi kiểm tra từ môi trường này. Route đã được áp dụng lại bằng Wrangler. Chưa xác nhận end-to-end production cho tới khi `/api/health` trả `200` và `{"ok":true}`. Nếu còn lỗi, kiểm tra Workers & Pages → `thiep-hen-ho` → Settings → Domains & Routes và trạng thái `workers.dev`. Không tắt kiểm tra HTTPS hoặc đổi sang lưu SQLite tạm để khắc phục lỗi route.
+Bản Pages dùng cùng mã API và D1 để tránh lỗi cấp route `workers.dev` ở tài khoản mới. Không cần sửa UI hay chuyển database. Phản hồi kiểm thử production mới đã được xóa bằng UUID và marker riêng; không upload phản hồi SQLite cũ.
 
 ## Backend Node/Express cũ (tùy chọn)
 
