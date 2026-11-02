@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { readConfig } from './cloudflare-cli.mjs';
 
-export const project = 'thiep-hen-ho-hiennguyen186';
+export const project = 'a-special-date-invitation';
 
 export async function createPagesBuild() {
   const worker = readConfig();

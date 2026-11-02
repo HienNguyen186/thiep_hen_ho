@@ -36,7 +36,7 @@ Mở http://127.0.0.1:8787/ và http://127.0.0.1:8787/admin.
 
 Source: https://github.com/HienNguyen186/thiep_hen_ho
 
-Thiệp: https://thiep-hen-ho-hiennguyen186.pages.dev/ · Quản trị: https://thiep-hen-ho-hiennguyen186.pages.dev/admin
+Thiệp: https://a-special-date-invitation.pages.dev/ · Quản trị: https://a-special-date-invitation.pages.dev/admin
 
 Link này đã kiểm tra giao diện, health, gửi phản hồi, chống gửi trùng, đăng nhập quản trị, xem chi tiết, CSV và đăng xuất. Phản hồi giả dùng kiểm thử đã được xóa; dữ liệu SQLite cũ vẫn chỉ nằm trên máy.
 
@@ -46,12 +46,12 @@ npm run cf:setup
 npm run deploy:pages
 ```
 
-Với tài khoản hiện tại chỉ cần `npm run deploy:pages` mỗi lần cập nhật. Script build giao diện và `_worker.js` từ cùng `worker/index.ts`, áp dụng migration D1 còn thiếu, tái sử dụng/tạo dự án Pages `thiep-hen-ho-hiennguyen186`, cấu hình cùng database và publish lên nhánh production `main`. Các file build tạm ở `.cloudflare-pages/` đã được gitignore. Push GitHub chưa tự deploy.
+Với tài khoản hiện tại chỉ cần `npm run deploy:pages` mỗi lần cập nhật. Script build giao diện và `_worker.js` từ cùng `worker/index.ts`, áp dụng migration D1 còn thiếu, tái sử dụng/tạo dự án Pages `a-special-date-invitation`, cấu hình cùng database và publish lên nhánh production `main`. Các file build tạm ở `.cloudflare-pages/` đã được gitignore. Push GitHub chưa tự deploy.
 
 Lần đầu script lấy `ADMIN_PASSWORD` từ `.dev.vars` hoặc `.env` qua stdin. Secret Pages đã có sẽ được giữ nguyên, độc lập với secret của Worker riêng. Để đổi mật khẩu trên bản Pages:
 
 ```powershell
-npx wrangler pages secret put ADMIN_PASSWORD --project-name thiep-hen-ho-hiennguyen186
+npx wrangler pages secret put ADMIN_PASSWORD --project-name a-special-date-invitation
 npm run deploy:pages
 ```
 
