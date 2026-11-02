@@ -1,128 +1,173 @@
 # Date with you ♡
 
-Website thiệp mời hẹn hò dành cho hai người. Đã triển khai trực tiếp trong thư mục `thiệp`; thư mục `tư liệu` và video gốc được giữ nguyên. Trước khi triển khai, thư mục chỉ có video, chưa có frontend, backend hoặc cấu hình dự án.
+Thiệp mời hẹn hò tương tác dành cho hai người. Giao diện React được phục vụ bằng **Cloudflare Workers Static Assets**; API và trang quản trị dùng **Workers + D1**. Không cần Render hoặc ổ đĩa trả phí cho cấu hình triển khai chính. Dữ liệu phản hồi, phiên đăng nhập và giới hạn tốc độ được lưu trong D1, độc lập với vòng đời Worker.
 
 ## Chạy local
 
-Cần **Node.js 24+** (dùng SQLite tích hợp sẵn, không cần cài database riêng).
+Cần **Node.js 24+**.
 
 ```powershell
 cd D:\GIN\projects\thiệp
-npm install
-Copy-Item .env.example .env
-```
-
-Mở `.env`, đặt `ADMIN_PASSWORD` riêng, tối thiểu 12 ký tự. Không để mật khẩu vào mã frontend hoặc commit `.env`.
-
-```powershell
+npm ci
 npm run dev
 ```
 
+Lệnh này build giao diện ban đầu, tạo schema D1 local, chuẩn bị secret local rồi chạy Vite và Wrangler:
+
 - Thiệp: http://127.0.0.1:5173/
 - Quản trị: http://127.0.0.1:5173/admin
-- API: http://127.0.0.1:3001/api/health
+- Worker trực tiếp: http://127.0.0.1:8787/
+- Kiểm tra API: http://127.0.0.1:8787/api/health
 
-Dùng đúng địa chỉ `127.0.0.1` trong cấu hình trên; Vite chuyển tiếp `/api` về Express. Đăng nhập bằng mật khẩu đã đặt trong `.env`.
+Mật khẩu local nằm trong `.dev.vars` (gitignored). Khi tạo lần đầu, script tái sử dụng `ADMIN_PASSWORD` trong `.env` nếu có và đủ 12 ký tự, hoặc tạo một mật khẩu ngẫu nhiên mới. Có thể sửa `.dev.vars` rồi khởi động lại Wrangler. `.dev.vars.example` là mẫu; không dùng mật khẩu mẫu cho production.
 
-## Bản production local
+D1 local lưu tại `.wrangler/state/`, không phải database production. Tải lại trang, quay lại các bước và sửa từ màn tổng hợp đều giữ dữ liệu nháp trên cùng thiết bị/trình duyệt.
+
+Để xem bản build qua chính Worker local:
+
+```powershell
+npm run build
+npm start
+```
+
+Mở http://127.0.0.1:8787/ và http://127.0.0.1:8787/admin.
+
+## Deploy Cloudflare Workers + D1
+
+Source: https://github.com/HienNguyen186/thiep_hen_ho
+
+Địa chỉ đã publish: https://thiep-hen-ho.hiennguyen186.workers.dev/ · Quản trị: https://thiep-hen-ho.hiennguyen186.workers.dev/admin
+
+Dùng tài khoản **Workers Free**, tên miền phụ `workers.dev` và D1 Free. Chi phí bằng 0 trong hạn mức miễn phí; không cần mua domain. Không bật gói Workers Paid hoặc dịch vụ bổ sung nếu muốn giữ cấu hình miễn phí. Xem [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) và [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) để kiểm tra hạn mức hiện hành.
+
+1. Đăng nhập:
+
+   ```powershell
+   npm run cf:login
+   ```
+
+   Hoàn tất đăng nhập trong trình duyệt. Không gửi token hoặc mật khẩu Cloudflare vào chat hay commit.
+
+2. Tạo/ghép database và chạy migration:
+
+   ```powershell
+   npm run cf:setup
+   ```
+
+   Script tìm database tên `thiep-hen-ho`, tái sử dụng nếu đã có, hoặc tạo D1 tại vùng APAC. ID thật được ghi vào `wrangler.jsonc`; ID này không phải secret. Các migration trong `migrations/` chỉ áp dụng một lần. Database đang có được giữ nguyên.
+
+   Repository hiện gắn với D1 của tài khoản triển khai hiện tại. Nếu fork sang tài khoản khác, thay `database_id` bằng `00000000-0000-0000-0000-000000000000` trước khi chạy `cf:setup`. Không dùng ID của tài khoản khác.
+
+3. Lưu mật khẩu quản trị production:
+
+   ```powershell
+   npx wrangler secret put ADMIN_PASSWORD
+   ```
+
+   Nhập mật khẩu riêng tối thiểu 12 ký tự, tối đa 256 ký tự. Secret chỉ nằm ở Cloudflare. Nếu chưa tạo secret, script deploy có thể lấy mật khẩu hiện có từ `.dev.vars` hoặc `.env` và chuyển qua stdin; không in mật khẩu, không đưa vào argv hay mã frontend. Secret production đã có sẽ được giữ lại.
+
+4. Đăng ký tên miền phụ `workers.dev` trong **Workers & Pages** nếu tài khoản chưa có, sau đó:
+
+   ```powershell
+   npm run deploy
+   ```
+
+   Lệnh build, áp dụng migration còn thiếu, kiểm tra secret và publish Worker cùng assets. Dùng URL do Wrangler in ra. Nếu tài khoản mới chưa có subdomain, chạy `npx wrangler deploy` trong terminal tương tác để đăng ký, hoặc làm trên dashboard Cloudflare.
+
+   - `/`: thiệp mời công khai.
+   - `/admin`: trang quản trị, yêu cầu mật khẩu.
+   - `/api/health`: kiểm tra secret, D1 binding và schema.
+
+5. Khi cập nhật nội dung: chỉnh file, chạy checks, commit/push và `npm run deploy`. Push GitHub không tự deploy trừ khi bạn đã tự thiết lập Workers Builds/Git integration trên Cloudflare.
+
+Không đặt `ADMIN_PASSWORD` trong `wrangler.jsonc`, `vars`, mã React hoặc GitHub public. HTTPS production tự sử dụng cookie `__Host-`, `Secure`, `HttpOnly`, `SameSite=Strict`. Local HTTP dùng cookie riêng không có Secure. Không cần `COOKIE_SECURE`, `DATABASE_PATH`, `PORT` hoặc `HOST` cho Worker production.
+
+## Cá nhân hóa
+
+- `src/config/invitation.ts`: tên hai người, lời mở đầu, chữ ký và câu kết.
+- `shared/options.ts`: nhóm trang phục, món ăn, đồ uống và hoạt động.
+- `src/styles.css`: màu kem, hồng bụi, font và responsive.
+- `designs/`: các mẫu header form và thiệp mời PDF/vector đã tạo; video gốc ở `tư liệu/` được giữ nguyên.
+
+Minh họa phong thư dùng CSS, ảnh món ăn Unsplash có lazy loading và fallback emoji; Google Fonts có fallback. Không phát âm thanh. Tên hiện dùng mẫu Anh / Em.
+
+## Chức năng
+
+- 10 màn hình từ mở thiệp đến cảm ơn; có lựa chọn suy nghĩ/tạm dừng tự nguyện.
+- Nhiều ngày trong tương lai, nhiều khung giờ/ngày, thêm/xóa và validation; hoặc ngày linh hoạt. Múi giờ Asia/Bangkok.
+- Chọn nhiều trang phục, món ăn và hoạt động. Tráng miệng/đồ uống/ghi chú không bắt buộc.
+- Giờ về linh hoạt hoặc cụ thể, độc lập với giờ kết thúc khung giờ rảnh.
+- Lưu nháp localStorage, khôi phục sau reload, sửa từng phần từ tổng hợp.
+- Chặn nhấn gửi nhiều lần ở frontend và chống gửi trùng bằng khóa UNIQUE ở D1, kể cả request đồng thời từ nhiều Worker.
+- Admin: đăng nhập, danh sách, chi tiết, đã xem, sao chép có fallback và tải CSV UTF-8 BOM. CSV xuất theo trang để tránh tải toàn bộ database vào RAM, đồng thời escape công thức.
+- Mobile/desktop, label và focus bàn phím, aria-pressed, reduced motion.
+
+## API, xác thực và bảo mật
+
+| API | Chức năng |
+| --- | --- |
+| `POST /api/responses` | Validate và lưu câu trả lời, có idempotency qua UUID `submissionId` |
+| `POST /api/admin/login` | Đăng nhập bằng `{ "password": "…" }` |
+| `POST /api/admin/logout` | Hủy phiên |
+| `GET /api/admin/responses` | Tối đa 1.000 bản ghi mới nhất |
+| `GET /api/admin/responses/:id` | Xem chi tiết và đánh dấu đã xem |
+| `GET /api/admin/responses/export` | CSV tất cả bản ghi |
+
+Các API admin yêu cầu cookie phiên 8 giờ. Token ngẫu nhiên chỉ lưu dạng HMAC trong D1; thay `ADMIN_PASSWORD` tự vô hiệu hóa phiên cũ. Password được so sánh bằng Web Crypto native constant-time, không dùng scrypt đồng bộ tốn CPU của Node trên Workers Free. Mật khẩu không lưu trong database.
+
+Rate limit lưu D1 và tăng atomically: 12 lần gửi/phút/IP, 8 lần đăng nhập/15 phút/IP. IP lấy từ header edge `CF-Connecting-IP`. Có kiểm tra Origin/Sec-Fetch-Site, body JSON tối đa 48 KiB (kể cả body truyền từng chunk), prepared statements, security headers và API no-store. Không render HTML từ ghi chú. `/api/*` chạy Worker trước SPA fallback, nên API lỗi không bị biến thành trang HTML.
+
+Secret/binding chưa cấu hình trả `503`. Lỗi nội bộ không trả SQL/secret ra frontend. Rate limit bị vượt trả `429` với `Retry-After`. Database chưa migration có thể làm health thất bại; chạy `npm run cf:setup` hoặc `npm run db:migrate:remote`.
+
+## Database và sao lưu
+
+- Production: D1 binding `DB`, bảng `responses`, `sessions`, `rate_limits` và các index.
+- Local: D1 riêng trong `.wrangler/state/`, không đồng bộ tự động lên production.
+- Schema thay đổi bằng migration SQL mới; không sửa migration đã chạy trên production.
+- `npx wrangler d1 export DB --remote --output backup.sql` để sao lưu thủ công. File backup chứa nội dung riêng; `backup*.sql` và `backups/` đã được gitignore. Giữ bản sao lưu ở nơi riêng tư.
+- Dữ liệu SQLite cũ trong `data/` được giữ nguyên trên máy theo lựa chọn của chủ dự án. Không upload phản hồi cũ lên Cloudflare. Bản Cloudflare chỉ lưu các phản hồi gửi mới vào D1; không chuyển phiên đăng nhập cũ.
+
+## Cấu trúc
+
+```text
+src/                   # React UI, config, API client, draft storage
+shared/                # Types, Zod schema và danh sách lựa chọn
+worker/                # Workers API, D1, Web Crypto, CSV stream
+migrations/            # D1 SQL migrations
+scripts/               # Local preparation, D1 setup và deploy CLI
+public/_headers        # Security headers cho assets
+wrangler.jsonc         # Worker, D1 binding, SPA và API routing
+.dev.vars.example      # Secret mẫu cho local
+server/                # Backend Node/Express cũ, tùy chọn
+.env.example           # Biến môi trường cho Node cũ
+tests/                 # Schema, Node API và Workers/D1 integration tests
+```
+
+React 19, TypeScript, Vite, CSS, Lucide, Zod; Cloudflare Workers + D1, Web Crypto, Wrangler. Không sử dụng API ảnh hoặc dịch vụ AI trả phí trong website.
+
+## Kiểm thử
 
 ```powershell
 npm run lint
 npm test
 npm run build
-npm start
+npm run deploy:check
 ```
 
-Express phục vụ cả giao diện build và API tại http://127.0.0.1:3001/; trang quản trị tại http://127.0.0.1:3001/admin. `npm start` sử dụng `tsx`, vì vậy khi triển khai kiểu này cần giữ dependencies phát triển hoặc biên dịch server riêng. Đây là sản phẩm chạy local; chưa cấu hình hosting/domain. Để người yêu mở trên thiết bị khác, cần triển khai lên máy chủ Node 24 với HTTPS, gắn ổ lưu trữ bền vững cho `data/`, reverse proxy về cổng local, và đặt `COOKIE_SECURE=true`. Không đưa thư mục database lên public/static hosting. Phải giữ nguyên Host khi proxy (hoặc cấu hình rewrite Origin/Host nhất quán) để kiểm tra nguồn hoạt động.
+17 integration tests kiểm tra cả backend cũ và workerd/D1 thật local: schema ngày/giờ, idempotency đồng thời, login/cookie/logout, đã xem, CSV nhiều trang/formula escaping, body quá lớn, CSRF, phiên hết hạn, đổi mật khẩu, rate limit theo IP và dữ liệu/phiên sau restart. Tự động dùng database kiểm thử riêng; không ghi vào production.
 
-## Deploy lên Render
+Đã kiểm tra luồng UI trên desktop/mobile, khôi phục nháp, sửa từ tổng hợp, gửi, quản trị, sao chép và tải CSV ở bản trước. Sau migration, kiểm tra lại health, login và giao diện thực tế trên URL Worker. Ảnh QA ở `test-results/` (gitignored).
 
-Source repository: https://github.com/HienNguyen186/thiep_hen_ho
+Cloudflare đã chấp nhận bản deploy và cấp URL, nhưng trong lần triển khai đầu tiên tên miền mới còn trả lỗi edge `1042` khi kiểm tra từ môi trường này. Route đã được áp dụng lại bằng Wrangler. Chưa xác nhận end-to-end production cho tới khi `/api/health` trả `200` và `{"ok":true}`. Nếu còn lỗi, kiểm tra Workers & Pages → `thiep-hen-ho` → Settings → Domains & Routes và trạng thái `workers.dev`. Không tắt kiểm tra HTTPS hoặc đổi sang lưu SQLite tạm để khắc phục lỗi route.
 
-Tạo **Web Service**, kết nối repo, chọn nhánh `main`, Language `Node`, Region `Singapore`. Root Directory để trống vì `package.json` ở gốc repository.
+## Backend Node/Express cũ (tùy chọn)
 
-| Cấu hình | Giá trị |
-| --- | --- |
-| Build Command | `npm ci --include=dev && npm run build` |
-| Start Command | `npm start` |
-| Health Check Path | `/api/health` |
-| `NODE_VERSION` | `24.22.1` |
-| `NODE_ENV` | `production` |
-| `HOST` | `0.0.0.0` |
-| `ADMIN_PASSWORD` | Mật khẩu riêng, tối thiểu 12 ký tự |
-| `COOKIE_SECURE` | `true` |
-| `DATABASE_PATH` | `/var/data/date-with-you.sqlite` |
+Giữ nguyên `server/`, SQLite trong `data/` và `.env` cho nhu cầu chạy Node riêng:
 
-Render tự cung cấp `PORT` và `RENDER=true`. Server tự dùng host `0.0.0.0` và tin cậy một proxy khi nhận diện môi trường Render; local vẫn mặc định `127.0.0.1`. Nếu thêm lớp CDN/proxy khác, cần kiểm tra lại số proxy để giới hạn tốc độ theo đúng IP người dùng.
-
-**Lưu bền vững:** chọn Web Service trả phí có Persistent Disk và gắn disk tại `/var/data`. Chỉ những file trong đường dẫn disk mới được giữ qua restart/redeploy. Free service không có Persistent Disk nên không phù hợp để giữ phản hồi SQLite thật. Disk có thể gắn trong Advanced lúc tạo dịch vụ hoặc tại trang Disks sau đó. Đặt cấu hình disk trước khi gửi câu trả lời thật.
-
-Sau khi deploy, mở `/api/health` để kiểm tra `{"ok":true}`, thử gửi từ `/`, đăng nhập `/admin` và kiểm tra bản ghi vẫn còn sau khi restart. Thay tên/nội dung trong `src/config/invitation.ts`, commit và push để cập nhật bản deploy. Website chỉ được coi là đã lên mạng khi Render báo deploy thành công; việc có source trên GitHub chưa đồng nghĩa đã deploy.
-
-Tài liệu: [Web Services](https://render.com/docs/web-services), [Persistent Disks](https://render.com/docs/disks), [Node version](https://render.com/docs/node-version).
-
-## Cá nhân hóa
-
-Sửa `src/config/invitation.ts`: tên người mời/người nhận, ngày tạo, lời mở đầu, câu hỏi, chữ ký và câu kết. Sửa các lựa chọn và URL ảnh trong `shared/options.ts`. Minh họa phong thư tạo bằng CSS, không cần API ảnh. Ảnh món ăn dùng Unsplash, lazy loading, kích thước 240px, fallback emoji khi tải lỗi. Font Google có fallback serif/sans-serif. Không phát âm thanh.
-
-## Biến môi trường
-
-| Biến | Ý nghĩa |
-| --- | --- |
-| `ADMIN_PASSWORD` | Bắt buộc, tối thiểu 12 ký tự; chỉ đọc ở backend |
-| `PORT` | Cổng Express; mặc định `3001`. Nếu đổi khi dev, sửa proxy trong `vite.config.ts` |
-| `DATABASE_PATH` | File SQLite, mặc định `./data/date-with-you.sqlite`; tương đối với thư mục chạy lệnh |
-| `COOKIE_SECURE` | `false` khi HTTP local, `true` khi triển khai HTTPS |
-
-## Chức năng
-
-- 10 màn hình: mở thiệp → ngày/giờ → trang phục → món chính → tráng miệng/đồ uống → hoạt động → giờ về → lời nhắn → xem lại → cảm ơn.
-- Nút suy nghĩ cho phép tạm dừng tự nguyện, không chạy trốn con trỏ, không ép đồng ý.
-- Nhiều ngày trong tương lai, nhiều khung giờ/ngày; thêm/xóa và kiểm tra giờ kết thúc. Chọn ngày linh hoạt. Ngày hiện tại xác định theo múi giờ Asia/Bangkok.
-- Chọn nhiều trang phục, món ăn, hoạt động. Tùy chọn không có sở thích/không tráng miệng được chọn riêng để tránh mâu thuẫn.
-- Giờ về linh hoạt hoặc cụ thể, độc lập với giờ kết thúc khung giờ rảnh.
-- Lưu bản nháp localStorage, khôi phục bằng nút Viết tiếp. Sửa từng phần ở bước xem lại và trở về bản tổng hợp. Chặn gửi nhiều lần, có trạng thái gửi/lỗi/thành công. Chỉ xóa nháp sau khi server xác nhận.
-- `/admin`: mật khẩu, cookie phiên 8 giờ, danh sách câu trả lời, chi tiết từng nhóm, ngày giờ gửi GMT+7, đánh dấu đã xem, sao chép, xuất CSV UTF-8 có BOM để mở trong Excel.
-- Responsive mobile/desktop, focus bàn phím, label input, aria-pressed, reduced motion.
-
-## Cấu trúc
-
-```text
-src/
-  components/    # Thiệp, lựa chọn, ngày giờ, từng bước, tổng hợp
-  config/        # Nội dung cá nhân hóa
-  pages/         # InvitationPage, AdminPage (lazy loaded)
-  services/      # HTTP API và xử lý lỗi
-  utils/         # Bản nháp, ngày và tổng hợp câu trả lời
-  main.tsx
-  styles.css
-shared/          # Các lựa chọn, schema Zod, kiểu TypeScript
-server/          # Express API, xác thực, SQLite, CSV và static serving
-tests/           # Schema và integration tests (Node test + Supertest)
-data/            # SQLite + WAL, tự tạo, gitignored
-tư liệu/         # Video tham khảo gốc
-.env.example
+```powershell
+npm run dev:node
+# Hoặc sau khi build:
+npm run start:node
 ```
 
-React 19, TypeScript, Vite, CSS thuần, Lucide React; Express 5, `node:sqlite`, Zod. Không cần dịch vụ trả phí.
-
-## API và lưu trữ
-
-- `POST /api/responses`: validate, lưu một phản hồi; `submissionId` UUID làm khóa idempotency. Gửi lại cùng mã/cùng nội dung trả bản ghi cũ; thay nội dung cùng mã trả `409`.
-- `POST /api/admin/login`: `{ "password": "…" }`; giới hạn 8 lần / 15 phút / IP.
-- `POST /api/admin/logout`: hủy phiên.
-- `GET /api/admin/responses`: tối đa 1.000 câu trả lời mới nhất.
-- `GET /api/admin/responses/:id`: xem chi tiết, đánh dấu đã xem.
-- `GET /api/admin/responses/export`: xuất tất cả bản ghi, chống công thức CSV.
-
-API quản trị yêu cầu cookie HttpOnly, SameSite=Strict. Phiên ngẫu nhiên chỉ lưu hash trong SQLite. Kiểm tra Origin/Sec-Fetch-Site cho thao tác ghi, Helmet, giới hạn body/rate, prepared statements, không trả lỗi nội bộ. Nếu đổi mật khẩu, khởi động lại server; các phiên đang có vẫn tồn tại đến khi hết hạn (có thể xóa bảng sessions để thu hồi tất cả). Nội dung ghi chú hiển thị bằng text React, không render HTML.
-
-Sao lưu database bằng SQLite backup hoặc dừng server rồi sao chép file database (kèm WAL/SHM nếu sao chép khi đang chạy). Không xóa `data/` nếu muốn giữ phản hồi. Không có chức năng xóa câu trả lời trong giao diện.
-
-## Kiểm thử
-
-`npm test` kiểm tra schema ngày/giờ, lựa chọn không hợp lệ, trường không bắt buộc, lưu/idempotency, xác thực/cookie, đã xem, CSV/formula escaping, khác nguồn, phiên hết hạn, lưu bền vững sau mở lại database và gửi qua proxy Vite thật. Dữ liệu tự động dùng database riêng. Bản ghi tạo khi kiểm tra giao diện đã được dọn sau khi hoàn tất.
-
-Đã kiểm tra thủ công luồng từ mở thiệp đến gửi thành công, khôi phục nháp sau reload, sửa từ tổng hợp, đăng nhập quản trị, trạng thái đã xem, sao chép có fallback và tải CSV thật. Ảnh kiểm tra lưu tại `test-results/` (gitignored). Các ảnh bên ngoài cần kết nối Internet; lỗi tải có fallback. Chưa triển khai lên Internet và chưa có tên/domain thực tế của hai người.
-
-Nguồn ảnh thay thế đã đối chiếu nội dung: [lẩu — tommao wang](https://unsplash.com/photos/table-laden-with-hot-pot-ingredients-and-broth-qZfpBaznrN8), [steak — UY VO](https://unsplash.com/photos/steak-on-plate-M6dFjjpoqfU).
+Node API mặc định cổng 3001; Vite ở chế độ `node` proxy về 3001. `.env.example` ghi `ADMIN_PASSWORD`, `PORT`, `DATABASE_PATH`, `COOKIE_SECURE`, tùy chọn `HOST`. Cấu hình Render cũ tự bind `0.0.0.0` và trust một proxy khi có `RENDER=true`; cần disk riêng nếu muốn lưu SQLite bền vững tại Render. Đây không phải đường deploy miễn phí chính của dự án nữa.

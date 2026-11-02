@@ -86,7 +86,8 @@ test('Vite proxy preserves the browser origin for response submission', async ()
   await new Promise<void>(resolve => apiServer.once('listening', resolve));
   const address = apiServer.address();
   if (!address || typeof address === 'string') throw new Error('Missing API port');
-  const proxy = await createServer({ configFile: false, server: { host: '127.0.0.1', port: 0, proxy: { '/api': { ...viteConfig.server!.proxy!['/api'] as object, target: `http://127.0.0.1:${address.port}` } } }, logLevel: 'silent' });
+  const config = viteConfig({ command: 'serve', mode: 'development' });
+  const proxy = await createServer({ configFile: false, server: { host: '127.0.0.1', port: 0, proxy: { '/api': { ...config.server!.proxy!['/api'] as object, target: `http://127.0.0.1:${address.port}` } } }, logLevel: 'silent' });
   try {
     await proxy.listen();
     const frontendAddress = proxy.httpServer!.address();
